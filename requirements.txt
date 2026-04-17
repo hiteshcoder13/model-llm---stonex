@@ -39,3 +39,4 @@ seaborn
 uvicorn
 multipart
 dotenv
+azure-cosmos

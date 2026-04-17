@@ -11,8 +11,8 @@ app = FastAPI()
 # -----------------------------
 COSMOS_URL = "YOUR_URL"
 COSMOS_KEY = "YOUR_KEY"
-DB_NAME = "YOUR_DB"
-CONTAINER_NAME = "YOUR_CONTAINER"
+DB_NAME = "stonexaiservicepreprod"
+CONTAINER_NAME = "images1"
 
 client = CosmosClient(COSMOS_URL, credential=COSMOS_KEY)
 container = client.get_database_client(DB_NAME).get_container_client(CONTAINER_NAME)
