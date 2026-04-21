@@ -1,35 +1,26 @@
 # ── Core web app ──────────────────────────────────────────────────────────────
 streamlit>=1.32.0
-streamlit-sortables          # drag-and-drop layer reorder in sidebar
+streamlit-sortables
 
 # ── Image processing ──────────────────────────────────────────────────────────
-numpy<2.0.0                         # MUST stay on 1.x — torch 2.2 breaks with numpy 2.x
-opencv-python-headless==4.9.0.80
-pillow==10.2.0
-scikit-image==0.22.0
+numpy==1.24.3                          # Compatible version
+opencv-python-headless==4.8.1.78      # More stable on Streamlit Cloud
+pillow==10.0.0
+scikit-image==0.21.0
 
 # ── ML / deep learning ────────────────────────────────────────────────────────
-# CPU-only machine: use the lines below as-is
-torch==2.2.2
-torchvision==0.17.2
-torchaudio==2.2.2
-# ──────────────────────────────────────────────────────────────────────────────
-# GPU machine (CUDA 11.8): comment out the 3 lines above and uncomment below
-# --index-url https://download.pytorch.org/whl/cu118
-# torch==2.2.2+cu118
-# torchvision==0.17.2+cu118
-# torchaudio==2.2.2+cu118
-# ──────────────────────────────────────────────────────────────────────────────
+torch==2.1.2                          # Slightly older but more stable
+torchvision==0.16.2
+torchaudio==2.1.2
 
-timm                                 # DINOv2-small backbone (vit_small_patch14_dinov2)
-albumentations                       # image augmentation + VAL_TF
-faiss-cpu                            # FAISS vector index (CPU version)
-# faiss-gpu                          # uncomment if you have a CUDA GPU
+timm
+albumentations
+faiss-cpu
 
 # ── Colour pipeline / vector DB ───────────────────────────────────────────────
-scikit-learn==1.4.2                  # KMeans clustering
-chromadb==0.4.24                     # ChromaDB vector store
-protobuf==3.20.3                     # required by chromadb 0.4.x
+scikit-learn==1.3.2
+chromadb==0.4.22
+protobuf==3.20.3
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 tqdm
@@ -37,14 +28,11 @@ loguru
 matplotlib
 seaborn
 uvicorn
-multipart
-dotenv
+python-multipart
+python-dotenv
 azure-cosmos
 ultralytics
 
 httpx
 requests
 google-genai
-
-opencv-python-headless==4.8.1.78
-pillow
