@@ -33,7 +33,7 @@ from google.genai import types
 logger = logging.getLogger(__name__)
 
 # ── Gemini configuration (multiple keys from Streamlit secrets) ────────────────
-GEMINI_MODEL = "gemini-2.0-flash-exp"
+GEMINI_MODEL = "gemini-2.5-flash-lite"
 
 def _load_api_keys_from_secrets() -> list[str]:
     """Load all available API keys from Streamlit secrets.
