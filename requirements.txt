@@ -2,25 +2,30 @@
 streamlit>=1.32.0
 streamlit-sortables
 
+# ── Python 3.12 compatibility ─────────────────────────────────────────────────
+setuptools>=68.0.0
+wheel>=0.41.0
+
 # ── Image processing ──────────────────────────────────────────────────────────
-numpy==1.24.3                          # Compatible version
-opencv-python-headless==4.8.1.78      # More stable on Streamlit Cloud
+numpy==1.24.3
+opencv-python-headless==4.8.1.78
 pillow==10.0.0
-scikit-image==0.21.0
+scikit-image==0.22.0
 
 # ── ML / deep learning ────────────────────────────────────────────────────────
-torch==2.1.2                          # Slightly older but more stable
-torchvision==0.16.2
-torchaudio==2.1.2
+# Use newer versions for Python 3.12 compatibility
+torch==2.2.2
+torchvision==0.17.2
+torchaudio==2.2.2
 
 timm
 albumentations
 faiss-cpu
 
 # ── Colour pipeline / vector DB ───────────────────────────────────────────────
-scikit-learn==1.3.2
-chromadb==0.4.22
-protobuf==3.20.3
+scikit-learn==1.4.2
+chromadb==0.5.0  # Newer version with Python 3.12 support
+protobuf==4.25.3  # Newer version
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 tqdm
