@@ -1,33 +1,32 @@
-# ── Core web app ──────────────────────────────────────────────────────────────
+# ── Core web app ─────────────────────────────────────────────
 streamlit>=1.32.0
 streamlit-sortables
 
-# ── Python 3.12 compatibility ─────────────────────────────────────────────────
+# ── Python 3.12 compatibility ────────────────────────────────
 setuptools>=68.0.0
 wheel>=0.41.0
 
-# ── Image processing ──────────────────────────────────────────────────────────
-numpy==1.24.3
-opencv-python-headless==4.8.1.78
-pillow==10.0.0
-scikit-image==0.22.0
+# ── Image processing ─────────────────────────────────────────
+numpy>=1.26.0
+opencv-python-headless>=4.9.0.80
+pillow>=10.0.0
+scikit-image>=0.22.0
 
-# ── ML / deep learning ────────────────────────────────────────────────────────
-# Use newer versions for Python 3.12 compatibility
+# ── ML / deep learning ───────────────────────────────────────
 torch==2.2.2
 torchvision==0.17.2
 torchaudio==2.2.2
 
 timm
 albumentations
-faiss-cpu
+faiss-cpu==1.7.4
 
-# ── Colour pipeline / vector DB ───────────────────────────────────────────────
-scikit-learn==1.4.2
-chromadb==0.5.0  # Newer version with Python 3.12 support
-protobuf==4.25.3  # Newer version
+# ── Colour pipeline / vector DB ──────────────────────────────
+scikit-learn>=1.4.2
+chromadb>=0.5.0
+protobuf>=4.25.3
 
-# ── Utilities ─────────────────────────────────────────────────────────────────
+# ── Utilities ────────────────────────────────────────────────
 tqdm
 loguru
 matplotlib
