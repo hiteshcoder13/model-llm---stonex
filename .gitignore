@@ -1,0 +1,9 @@
+venv
+.env
+__pycache__
+stonex-venv
+.pt
+sam2_s.pt
+env
+.venv
+pt
