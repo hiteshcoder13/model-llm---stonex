@@ -3,7 +3,7 @@ stone_reranker.py
 -----------------
 Gemini-powered visual reranking for stone families using discriminative visual keys.
 
-Model: gemini-3.1-flash-lite-preview
+Model: gemini-2.0-flash-exp (updated from preview)
 
 Improvements over previous version:
 - Candidate block now highlights only the most differentiating visual attributes
@@ -14,6 +14,7 @@ Improvements over previous version:
 Multi‑API‑key fallback:
 - Supports GEMINI_API_KEY (legacy) and GEMINI_API_KEY1..6
 - On quota/resource exhausted errors, automatically switches to the next available key
+- API keys are loaded from Streamlit secrets for cloud hosting
 """
 
 from __future__ import annotations
@@ -24,35 +25,61 @@ import logging
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
+import streamlit as st
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
 
-load_dotenv()
-
 logger = logging.getLogger(__name__)
 
-# ── Gemini configuration (multiple keys) ──────────────────────────────────────
-GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
+# ── Gemini configuration (multiple keys from Streamlit secrets) ────────────────
+GEMINI_MODEL = "gemini-2.0-flash-exp"
 
-# Hardcoded API key
-HARDCODED_API_KEY = "AIzaSyASRQeD1FxVfuu9wSPtl2hY-zApLUCK6qg"
-
-def _load_api_keys() -> list[str]:
-    """Load all available API keys from environment variables and hardcoded key.
+def _load_api_keys_from_secrets() -> list[str]:
+    """Load all available API keys from Streamlit secrets.
     
     Priority order:
-        1. Hardcoded key (always first)
-        2. GEMINI_API_KEY (legacy)
-        3. GEMINI_API_KEY1, GEMINI_API_KEY2, ... GEMINI_API_KEY6
+        1. GEMINI_API_KEY (legacy)
+        2. GEMINI_API_KEY1, GEMINI_API_KEY2, ... GEMINI_API_KEY6
     Empty or None keys are filtered out.
     """
     keys = []
     
-    # Hardcoded key first
-    if HARDCODED_API_KEY and HARDCODED_API_KEY.strip():
-        keys.append(HARDCODED_API_KEY.strip())
+    try:
+        # Legacy single key
+        if "GEMINI_API_KEY" in st.secrets:
+            legacy_key = st.secrets["GEMINI_API_KEY"]
+            if legacy_key and str(legacy_key).strip():
+                keys.append(str(legacy_key).strip())
+        
+        # Numbered keys
+        for i in range(1, 7):
+            key_name = f"GEMINI_API_KEY{i}"
+            if key_name in st.secrets:
+                key = st.secrets[key_name]
+                if key and str(key).strip():
+                    keys.append(str(key).strip())
+    
+    except Exception as e:
+        logger.error(f"Error loading API keys from secrets: {e}")
+        raise RuntimeError(
+            "Failed to load Gemini API keys from Streamlit secrets. "
+            "Please ensure your secrets.toml file is properly configured."
+        )
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_keys = []
+    for k in keys:
+        if k not in seen:
+            seen.add(k)
+            unique_keys.append(k)
+    
+    return unique_keys
+
+def _load_api_keys_from_env() -> list[str]:
+    """Fallback: Load API keys from environment variables (for local development)."""
+    keys = []
     
     # Legacy single key
     legacy_key = os.getenv("GEMINI_API_KEY")
@@ -65,7 +92,7 @@ def _load_api_keys() -> list[str]:
         if key and key.strip():
             keys.append(key.strip())
     
-    # Remove duplicates while preserving order
+    # Remove duplicates
     seen = set()
     unique_keys = []
     for k in keys:
@@ -75,13 +102,30 @@ def _load_api_keys() -> list[str]:
     
     return unique_keys
 
-_API_KEYS = _load_api_keys()
-if not _API_KEYS:
+def _get_api_keys() -> list[str]:
+    """Get API keys from Streamlit secrets if available, otherwise fallback to env vars."""
+    try:
+        # Try to load from Streamlit secrets first (for cloud hosting)
+        keys = _load_api_keys_from_secrets()
+        if keys:
+            logger.info(f"Loaded {len(keys)} API key(s) from Streamlit secrets")
+            return keys
+    except Exception as e:
+        logger.warning(f"Could not load from Streamlit secrets: {e}")
+    
+    # Fallback to environment variables (for local development)
+    keys = _load_api_keys_from_env()
+    if keys:
+        logger.info(f"Loaded {len(keys)} API key(s) from environment variables")
+        return keys
+    
     raise RuntimeError(
         "No Gemini API keys found. Please set GEMINI_API_KEY or GEMINI_API_KEY1..6 "
-        "in your .env file. Get free keys at https://aistudio.google.com"
+        "in your Streamlit secrets (for cloud hosting) or .env file (for local development). "
+        "Get free keys at https://aistudio.google.com"
     )
 
+_API_KEYS = _get_api_keys()
 logger.info("Loaded %d Gemini API key(s)", len(_API_KEYS))
 
 
@@ -91,19 +135,39 @@ def _create_client(api_key: str) -> genai.Client:
 
 
 # ── Stone knowledge base ───────────────────────────────────────────────────────
-_KB_PATH = Path(__file__).parent / "stones_db.json"
-_STONES_DB: dict[str, dict] | None = None
+def _get_kb_path() -> Path:
+    """Get the path to stones_db.json, handling both local and Streamlit Cloud deployment."""
+    # Try to find the file in the current directory
+    current_dir = Path(__file__).parent
+    kb_path = current_dir / "stones_db.json"
+    
+    if kb_path.exists():
+        return kb_path
+    
+    # Try in the app's root directory (for Streamlit Cloud)
+    import streamlit.web.bootstrap as bootstrap
+    app_root = Path(bootstrap.__file__).parent.parent
+    kb_path = app_root / "stones_db.json"
+    
+    if kb_path.exists():
+        return kb_path
+    
+    # If not found, return the original path (will raise error later)
+    return current_dir / "stones_db.json"
 
+_STONES_DB: dict[str, dict] | None = None
 
 def _load_kb() -> dict[str, dict]:
     global _STONES_DB
     if _STONES_DB is None:
-        if not _KB_PATH.exists():
+        kb_path = _get_kb_path()
+        if not kb_path.exists():
             raise FileNotFoundError(
-                f"Stone knowledge base not found at {_KB_PATH}. "
-                "Place stones_db.json in the same directory as stone_reranker.py."
+                f"Stone knowledge base not found at {kb_path}. "
+                "Place stones_db.json in the same directory as stone_reranker.py "
+                "or in the app root directory."
             )
-        with open(_KB_PATH, encoding="utf-8") as fh:
+        with open(kb_path, encoding="utf-8") as fh:
             _STONES_DB = json.load(fh)
         logger.info("Loaded %d stones from knowledge base.", len(_STONES_DB))
     return _STONES_DB
@@ -232,41 +296,6 @@ Return ONLY this JSON object:
 }}
 """
 
-# ── Helper function to check if error is quota-related ─────────────────────────
-def _is_quota_error(exception: Exception) -> bool:
-    """Check if an exception is a quota/resource exhausted error."""
-    error_msg = str(exception).lower()
-    
-    # Check common quota indicators in error message
-    if any(phrase in error_msg for phrase in [
-        "resource exhausted",
-        "quota",
-        "rate limit",
-        "429",
-        "too many requests",
-        "exceeded"
-    ]):
-        return True
-    
-    # Check for specific ClientError attributes
-    if hasattr(exception, 'code'):
-        if exception.code in [429, 503, 5008]:  # Common quota error codes
-            return True
-    
-    if hasattr(exception, 'status_code'):
-        if exception.status_code in [429, 503]:
-            return True
-    
-    # Check for specific Google API error patterns
-    if hasattr(exception, 'message'):
-        if any(phrase in exception.message.lower() for phrase in [
-            "quota", "resource exhausted", "rate limit"
-        ]):
-            return True
-    
-    return False
-
-
 # ── Gemini call with multi‑key fallback ────────────────────────────────────────
 def _call_gemini_with_fallback(
     image_bytes: bytes,
@@ -281,8 +310,6 @@ def _call_gemini_with_fallback(
 
     for idx, api_key in enumerate(_API_KEYS):
         try:
-            logger.info(f"Attempting to use API key {idx + 1}/{len(_API_KEYS)} (prefix: {api_key[:8]}...)")
-            
             client = _create_client(api_key)
             
             user_text = _USER_PROMPT_TEMPLATE.format(
@@ -316,15 +343,20 @@ def _call_gemini_with_fallback(
             clean = clean.strip()
 
             # Success – return parsed JSON
-            logger.info(f"Successfully used API key {idx + 1}")
             return json.loads(clean)
 
         except Exception as e:
             error_msg = str(e).lower()
-            logger.warning(f"API key {idx + 1} failed with error: {error_msg[:200]}")
-            
             # Check if this is a quota / resource exhausted error
-            if _is_quota_error(e):
+            is_quota_error = (
+                "resource exhausted" in error_msg
+                or "quota" in error_msg
+                or "429" in error_msg
+                or (hasattr(e, 'status_code') and e.status_code == 429)
+                or (isinstance(e, genai_errors.ClientError) and hasattr(e, 'status_code') and e.status_code == 429)
+            )
+            
+            if is_quota_error:
                 logger.warning(
                     "API key %d (prefix %s) failed with quota/resource exhausted error. "
                     "Switching to next key if available.",
@@ -340,8 +372,8 @@ def _call_gemini_with_fallback(
 
     # If we exhausted all keys, raise the last quota error
     raise RuntimeError(
-        f"All {len(_API_KEYS)} available Gemini API keys have exhausted their quota or are invalid. "
-        "Please add fresh keys or wait for quota reset. Last error: {str(last_exception)}"
+        "All available Gemini API keys have exhausted their quota or are invalid. "
+        "Please add fresh keys or wait for quota reset."
     ) from last_exception
 
 
