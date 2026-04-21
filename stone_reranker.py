@@ -232,6 +232,41 @@ Return ONLY this JSON object:
 }}
 """
 
+# ── Helper function to check if error is quota-related ─────────────────────────
+def _is_quota_error(exception: Exception) -> bool:
+    """Check if an exception is a quota/resource exhausted error."""
+    error_msg = str(exception).lower()
+    
+    # Check common quota indicators in error message
+    if any(phrase in error_msg for phrase in [
+        "resource exhausted",
+        "quota",
+        "rate limit",
+        "429",
+        "too many requests",
+        "exceeded"
+    ]):
+        return True
+    
+    # Check for specific ClientError attributes
+    if hasattr(exception, 'code'):
+        if exception.code in [429, 503, 5008]:  # Common quota error codes
+            return True
+    
+    if hasattr(exception, 'status_code'):
+        if exception.status_code in [429, 503]:
+            return True
+    
+    # Check for specific Google API error patterns
+    if hasattr(exception, 'message'):
+        if any(phrase in exception.message.lower() for phrase in [
+            "quota", "resource exhausted", "rate limit"
+        ]):
+            return True
+    
+    return False
+
+
 # ── Gemini call with multi‑key fallback ────────────────────────────────────────
 def _call_gemini_with_fallback(
     image_bytes: bytes,
@@ -246,6 +281,8 @@ def _call_gemini_with_fallback(
 
     for idx, api_key in enumerate(_API_KEYS):
         try:
+            logger.info(f"Attempting to use API key {idx + 1}/{len(_API_KEYS)} (prefix: {api_key[:8]}...)")
+            
             client = _create_client(api_key)
             
             user_text = _USER_PROMPT_TEMPLATE.format(
@@ -279,19 +316,15 @@ def _call_gemini_with_fallback(
             clean = clean.strip()
 
             # Success – return parsed JSON
+            logger.info(f"Successfully used API key {idx + 1}")
             return json.loads(clean)
 
         except Exception as e:
             error_msg = str(e).lower()
-            # Check if this is a quota / resource exhausted error
-            is_quota_error = (
-                "resource exhausted" in error_msg
-                or "quota" in error_msg
-                or "429" in error_msg
-                or (isinstance(e, genai_errors.ClientError) and e.status_code == 429)
-            )
+            logger.warning(f"API key {idx + 1} failed with error: {error_msg[:200]}")
             
-            if is_quota_error:
+            # Check if this is a quota / resource exhausted error
+            if _is_quota_error(e):
                 logger.warning(
                     "API key %d (prefix %s) failed with quota/resource exhausted error. "
                     "Switching to next key if available.",
@@ -307,8 +340,8 @@ def _call_gemini_with_fallback(
 
     # If we exhausted all keys, raise the last quota error
     raise RuntimeError(
-        "All available Gemini API keys have exhausted their quota or are invalid. "
-        "Please add fresh keys or wait for quota reset."
+        f"All {len(_API_KEYS)} available Gemini API keys have exhausted their quota or are invalid. "
+        "Please add fresh keys or wait for quota reset. Last error: {str(last_exception)}"
     ) from last_exception
 
 
