@@ -36,15 +36,23 @@ logger = logging.getLogger(__name__)
 # ── Gemini configuration (multiple keys) ──────────────────────────────────────
 GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
 
+# Hardcoded API key
+HARDCODED_API_KEY = "AIzaSyASRQeD1FxVfuu9wSPtl2hY-zApLUCK6qg"
+
 def _load_api_keys() -> list[str]:
-    """Load all available API keys from environment variables.
+    """Load all available API keys from environment variables and hardcoded key.
     
     Priority order:
-        1. GEMINI_API_KEY (legacy)
-        2. GEMINI_API_KEY1, GEMINI_API_KEY2, ... GEMINI_API_KEY6
+        1. Hardcoded key (always first)
+        2. GEMINI_API_KEY (legacy)
+        3. GEMINI_API_KEY1, GEMINI_API_KEY2, ... GEMINI_API_KEY6
     Empty or None keys are filtered out.
     """
     keys = []
+    
+    # Hardcoded key first
+    if HARDCODED_API_KEY and HARDCODED_API_KEY.strip():
+        keys.append(HARDCODED_API_KEY.strip())
     
     # Legacy single key
     legacy_key = os.getenv("GEMINI_API_KEY")
