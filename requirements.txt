@@ -1,39 +1,44 @@
-# ── Core web app ─────────────────────────────────────────────
+# ── Core web app ──────────────────────────────────────────────────────────────
 streamlit>=1.32.0
-streamlit-sortables
+streamlit-sortables          # drag-and-drop layer reorder in sidebar
 
-# ── Python 3.12 compatibility ────────────────────────────────
-setuptools>=68.0.0
-wheel>=0.41.0
+# ── Image processing ──────────────────────────────────────────────────────────
+numpy<2.0.0                         # MUST stay on 1.x — torch 2.2 breaks with numpy 2.x
+opencv-python-headless==4.9.0.80
+pillow==10.2.0
+scikit-image==0.22.0
 
-# ── Image processing ─────────────────────────────────────────
-numpy>=1.26.0
-opencv-python-headless>=4.9.0.80
-pillow>=10.0.0
-scikit-image>=0.22.0
-
-# ── ML / deep learning ───────────────────────────────────────
+# ── ML / deep learning ────────────────────────────────────────────────────────
+# CPU-only machine: use the lines below as-is
 torch==2.2.2
 torchvision==0.17.2
 torchaudio==2.2.2
+# ──────────────────────────────────────────────────────────────────────────────
+# GPU machine (CUDA 11.8): comment out the 3 lines above and uncomment below
+# --index-url https://download.pytorch.org/whl/cu118
+# torch==2.2.2+cu118
+# torchvision==0.17.2+cu118
+# torchaudio==2.2.2+cu118
+# ──────────────────────────────────────────────────────────────────────────────
 
-timm
-albumentations
-faiss-cpu==1.7.4
+timm                                 # DINOv2-small backbone (vit_small_patch14_dinov2)
+albumentations                       # image augmentation + VAL_TF
+faiss-cpu                            # FAISS vector index (CPU version)
+# faiss-gpu                          # uncomment if you have a CUDA GPU
 
-# ── Colour pipeline / vector DB ──────────────────────────────
-scikit-learn>=1.4.2
-chromadb>=0.5.0
-protobuf>=4.25.3
+# ── Colour pipeline / vector DB ───────────────────────────────────────────────
+scikit-learn==1.4.2                  # KMeans clustering
+chromadb==0.4.24                     # ChromaDB vector store
+protobuf==3.20.3                     # required by chromadb 0.4.x
 
-# ── Utilities ────────────────────────────────────────────────
+# ── Utilities ─────────────────────────────────────────────────────────────────
 tqdm
 loguru
 matplotlib
 seaborn
 uvicorn
-python-multipart
-python-dotenv
+multipart
+dotenv
 azure-cosmos
 ultralytics
 
