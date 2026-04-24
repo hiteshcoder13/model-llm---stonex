@@ -10,11 +10,6 @@ Improvements over previous version:
 - Emphasizes pattern type, directional features, and unique markers
 - Instructs Gemini to first describe the slab's visual pattern, then match
 - Reduces false matches (e.g., Carrara vs Bianco Vogue) by focusing on banding
-
-Multi‑API‑key fallback:
-- Supports GEMINI_API_KEY (legacy) and GEMINI_API_KEY1..6
-- On quota/resource exhausted errors, automatically switches to the next available key
-- API keys are loaded from Streamlit secrets for cloud hosting
 """
 
 from __future__ import annotations
@@ -25,107 +20,17 @@ import logging
 import os
 from pathlib import Path
 
-import streamlit as st
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
 
 logger = logging.getLogger(__name__)
 
-# ── Gemini configuration (multiple keys from Streamlit secrets) ────────────────
+# ── Gemini configuration (hardcoded API key) ───────────────────────────────────
 GEMINI_MODEL = "gemini-2.5-flash-lite"
 
-def _load_api_keys_from_secrets() -> list[str]:
-    """Load all available API keys from Streamlit secrets.
-    
-    Priority order:
-        1. GEMINI_API_KEY (legacy)
-        2. GEMINI_API_KEY1, GEMINI_API_KEY2, ... GEMINI_API_KEY6
-    Empty or None keys are filtered out.
-    """
-    keys = []
-    
-    try:
-        # Legacy single key
-        if "GEMINI_API_KEY" in st.secrets:
-            legacy_key = st.secrets["GEMINI_API_KEY"]
-            if legacy_key and str(legacy_key).strip():
-                keys.append(str(legacy_key).strip())
-        
-        # Numbered keys
-        for i in range(1, 7):
-            key_name = f"GEMINI_API_KEY{i}"
-            if key_name in st.secrets:
-                key = st.secrets[key_name]
-                if key and str(key).strip():
-                    keys.append(str(key).strip())
-    
-    except Exception as e:
-        logger.error(f"Error loading API keys from secrets: {e}")
-        raise RuntimeError(
-            "Failed to load Gemini API keys from Streamlit secrets. "
-            "Please ensure your secrets.toml file is properly configured."
-        )
-    
-    # Remove duplicates while preserving order
-    seen = set()
-    unique_keys = []
-    for k in keys:
-        if k not in seen:
-            seen.add(k)
-            unique_keys.append(k)
-    
-    return unique_keys
+_API_KEYS = ["AIzaSyDgjXg7p2oZNKfwqZe_AmQkjWhrCkpUUwM"]
 
-def _load_api_keys_from_env() -> list[str]:
-    """Fallback: Load API keys from environment variables (for local development)."""
-    keys = []
-    
-    # Legacy single key
-    legacy_key = os.getenv("GEMINI_API_KEY")
-    if legacy_key and legacy_key.strip():
-        keys.append(legacy_key.strip())
-    
-    # Numbered keys
-    for i in range(1, 7):
-        key = os.getenv(f"GEMINI_API_KEY{i}")
-        if key and key.strip():
-            keys.append(key.strip())
-    
-    # Remove duplicates
-    seen = set()
-    unique_keys = []
-    for k in keys:
-        if k not in seen:
-            seen.add(k)
-            unique_keys.append(k)
-    
-    return unique_keys
-
-def _get_api_keys() -> list[str]:
-    """Get API keys from Streamlit secrets if available, otherwise fallback to env vars."""
-    try:
-        # Try to load from Streamlit secrets first (for cloud hosting)
-        keys = _load_api_keys_from_secrets()
-        if keys:
-            logger.info(f"Loaded {len(keys)} API key(s) from Streamlit secrets")
-            return keys
-    except Exception as e:
-        logger.warning(f"Could not load from Streamlit secrets: {e}")
-    
-    # Fallback to environment variables (for local development)
-    keys = _load_api_keys_from_env()
-    if keys:
-        logger.info(f"Loaded {len(keys)} API key(s) from environment variables")
-        return keys
-    
-    raise RuntimeError(
-        "No Gemini API keys found. Please set GEMINI_API_KEY or GEMINI_API_KEY1..6 "
-        "in your Streamlit secrets (for cloud hosting) or .env file (for local development). "
-        "Get free keys at https://aistudio.google.com"
-    )
-
-_API_KEYS = _get_api_keys()
 logger.info("Loaded %d Gemini API key(s)", len(_API_KEYS))
 
 
