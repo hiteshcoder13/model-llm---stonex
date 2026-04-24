@@ -1,7 +1,6 @@
 """
-Standalone Streamlit app for StoneX Visual Rerank Pipeline.
+Streamlit app for StoneX Visual Rerank Pipeline.
 Uses local model (DINOv2) for prediction and Gemini for visual reranking.
-No external API server required.
 """
 
 import json
@@ -22,7 +21,8 @@ from cmd_mapping import resolve_family_name, is_cmd_class
 from stone_reranker import (
     rerank_stone_families, 
     set_gemini_api_key, 
-    get_gemini_api_key
+    get_gemini_api_key,
+    clear_gemini_api_key
 )
 
 load_dotenv()
@@ -181,26 +181,30 @@ with st.sidebar:
         help="Your API key is stored only in this session and never saved to disk."
     )
     
-    if st.button("Set API Key", type="primary", use_container_width=True):
-        if validate_api_key(api_key_input):
-            st.session_state.gemini_api_key = api_key_input.strip()
-            set_gemini_api_key(api_key_input.strip())
-            st.session_state.api_key_validated = True
-            st.success("✅ API key set successfully!")
-        else:
-            st.error("Please enter a valid API key")
+    col1, col2 = st.columns(2)
     
-    if st.session_state.api_key_validated:
-        st.success("🔓 API key is set and ready")
-        
-        # Option to clear the key
+    with col1:
+        if st.button("Set API Key", type="primary", use_container_width=True):
+            if validate_api_key(api_key_input):
+                st.session_state.gemini_api_key = api_key_input.strip()
+                set_gemini_api_key(api_key_input.strip())
+                st.session_state.api_key_validated = True
+                st.success("✅ API key set successfully!")
+                st.rerun()
+            else:
+                st.error("Please enter a valid API key")
+    
+    with col2:
         if st.button("Clear API Key", use_container_width=True):
             st.session_state.gemini_api_key = ""
-            set_gemini_api_key("")
+            clear_gemini_api_key()
             st.session_state.api_key_validated = False
             st.session_state.rerank_result = None
             st.warning("API key cleared")
             st.rerun()
+    
+    if st.session_state.api_key_validated:
+        st.success("🔓 API key is set and ready")
     else:
         st.warning("⚠️ API key not set. Gemini reranking will not work.")
     
