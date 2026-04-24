@@ -3,7 +3,7 @@ stone_reranker.py
 -----------------
 Gemini-powered visual reranking for stone families using discriminative visual keys.
 
-Model: gemini-2.0-flash-exp (updated from preview)
+Model: gemini-2.0-flash-exp
 
 Improvements over previous version:
 - Candidate block now highlights only the most differentiating visual attributes
@@ -45,10 +45,17 @@ def get_gemini_api_key() -> str | None:
     return _GEMINI_API_KEY
 
 
+def clear_gemini_api_key() -> None:
+    """Clear the stored Gemini API key."""
+    global _GEMINI_API_KEY
+    _GEMINI_API_KEY = None
+    logger.info("Gemini API key cleared")
+
+
 def _create_client() -> genai.Client:
     """Create a new Gemini client with the stored API key."""
     if _GEMINI_API_KEY is None:
-        raise RuntimeError("Gemini API key not set. Please provide an API key in the UI.")
+        raise RuntimeError("Gemini API key not set. Please provide an API key.")
     return genai.Client(api_key=_GEMINI_API_KEY)
 
 
@@ -94,7 +101,7 @@ def _load_kb() -> dict[str, dict]:
     return _STONES_DB
 
 
-def _get_stone_profile(family_name: str) -> dict | None:
+def get_stone_profile(family_name: str) -> dict | None:
     """Return the stone descriptor for `family_name` (case-insensitive lookup)."""
     db = _load_kb()
     key = family_name.strip().upper()
@@ -143,12 +150,12 @@ def _extract_discriminators(profile: dict) -> dict:
     }
 
 
-def _build_candidate_block(candidates: list[dict]) -> str:
+def build_candidate_block(candidates: list[dict]) -> str:
     """Build a concise, discriminative summary for each candidate."""
     lines: list[str] = []
     for idx, cand in enumerate(candidates, start=1):
         name = cand["family_name"]
-        profile = _get_stone_profile(name)
+        profile = get_stone_profile(name)
 
         lines.append("─" * 60)
         lines.append(f"Candidate {idx}: {name}")
@@ -217,7 +224,7 @@ Return ONLY this JSON object:
 }}
 """
 
-# ── Gemini call with single key (no fallback needed) ──────────────────────────
+# ── Gemini call ──────────────────────────────────────────────────────────────
 def _call_gemini(
     image_bytes: bytes,
     image_mime: str,
@@ -227,7 +234,7 @@ def _call_gemini(
     Call Gemini using the API key set via set_gemini_api_key().
     """
     if _GEMINI_API_KEY is None:
-        raise RuntimeError("Gemini API key not set. Please provide an API key in the UI.")
+        raise RuntimeError("Gemini API key not set. Please provide an API key.")
     
     try:
         client = _create_client()
@@ -302,12 +309,12 @@ async def rerank_stone_families(
         raise ValueError("candidates list must not be empty.")
     
     if _GEMINI_API_KEY is None:
-        raise RuntimeError("Gemini API key not set. Please provide an API key in the UI.")
+        raise RuntimeError("Gemini API key not set. Please provide an API key.")
 
     kb_hits = []
     kb_misses = []
     for c in candidates:
-        if _get_stone_profile(c["family_name"]):
+        if get_stone_profile(c["family_name"]):
             kb_hits.append(c["family_name"])
         else:
             kb_misses.append(c["family_name"])
@@ -315,7 +322,7 @@ async def rerank_stone_families(
     if kb_misses:
         logger.warning("KB misses (no descriptor found): %s", kb_misses)
 
-    candidate_block = _build_candidate_block(candidates)
+    candidate_block = build_candidate_block(candidates)
 
     # Run the Gemini call in a thread pool to avoid blocking the event loop
     gemini_result = await asyncio.to_thread(
