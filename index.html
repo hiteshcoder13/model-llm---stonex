@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>StoneX Visual Rerank Pipeline</title>
+    <!-- Google Fonts & simple CSS reset -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f8fafc;
+            color: #0f172a;
+            padding: 2rem 1.5rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* header */
+        .header {
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #3b3f5c, #2c2e47);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+            letter-spacing: -0.3px;
+        }
+        .header p {
+            color: #475569;
+            margin-top: 0.5rem;
+            font-size: 1rem;
+        }
+
+        /* two column layout */
+        .columns {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2rem;
+        }
+        .left-panel {
+            flex: 1;
+            min-width: 280px;
+        }
+        .right-panel {
+            flex: 2;
+            min-width: 320px;
+        }
+
+        /* cards */
+        .card {
+            background: white;
+            border-radius: 1.5rem;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.03), 0 2px 6px rgba(0,0,0,0.05);
+            padding: 1.5rem;
+            margin-bottom: 1.75rem;
+            border: 1px solid #e2e8f0;
+            transition: all 0.1s ease;
+        }
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #1e293b;
+        }
+        .badge {
+            background: #eef2ff;
+            color: #1e40af;
+            padding: 0.2rem 0.7rem;
+            border-radius: 2rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        /* upload area */
+        .upload-area {
+            border: 2px dashed #cbd5e1;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: 0.2s;
+            background: #fefefe;
+        }
+        .upload-area:hover {
+            border-color: #94a3b8;
+            background: #f9f9ff;
+        }
+        .upload-label {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.6rem;
+            cursor: pointer;
+        }
+        .upload-icon {
+            font-size: 2.5rem;
+        }
+        .preview-img {
+            margin-top: 1rem;
+            border-radius: 1rem;
+            max-width: 100%;
+            border: 1px solid #e2e8f0;
+        }
+        button {
+            background: #0f172a;
+            color: white;
+            border: none;
+            padding: 0.7rem 1.2rem;
+            border-radius: 2rem;
+            font-weight: 500;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: 0.2s;
+            width: 100%;
+            margin-top: 1rem;
+            font-family: inherit;
+        }
+        button.secondary {
+            background: #f1f5f9;
+            color: #1e293b;
+            border: 1px solid #cbd5e1;
+        }
+        button.secondary:hover {
+            background: #e2e8f0;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .dataframe {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+        }
+        .dataframe th, .dataframe td {
+            text-align: left;
+            padding: 0.65rem 0.5rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .dataframe th {
+            font-weight: 600;
+            color: #334155;
+        }
+        textarea {
+            width: 100%;
+            font-family: 'SF Mono', 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            background: #fafcff;
+            border: 1px solid #cbd5e1;
+            border-radius: 1rem;
+            padding: 0.75rem;
+            margin-top: 0.5rem;
+            resize: vertical;
+        }
+        .info-box {
+            background: #f8fafc;
+            border-left: 4px solid #3b82f6;
+            padding: 0.8rem 1rem;
+            border-radius: 0.75rem;
+            margin: 1rem 0;
+            font-size: 0.85rem;
+        }
+        .rank-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+        .rank-table th, .rank-table td {
+            padding: 0.7rem 0.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            text-align: left;
+        }
+        .metrics {
+            display: flex;
+            gap: 1rem;
+            margin: 1rem 0;
+            flex-wrap: wrap;
+        }
+        .metric-card {
+            background: #f1f5f9;
+            border-radius: 1rem;
+            padding: 0.8rem 1.2rem;
+            flex: 1;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .expandable {
+            background: #f9f9fc;
+            border-radius: 1rem;
+            margin-top: 1rem;
+            padding: 0.75rem;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .details-content {
+            display: none;
+            margin-top: 0.75rem;
+            padding-top: 0.5rem;
+        }
+        .separator {
+            height: 1px;
+            background: #e2e8f0;
+            margin: 1rem 0;
+        }
+        .status-loading {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid #e2e8f0;
+            border-top-color: #0f172a;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        footer {
+            margin-top: 2rem;
+            text-align: center;
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+        @media (max-width: 780px) {
+            body { padding: 1rem; }
+            .columns { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>🪨 StoneX Visual Rerank Pipeline</h1>
+        <p>Upload a slab image → DINOv2 predicts top‑5 families → Gemini reranks visually.<br>Edit candidates before reranking (JSON).</p>
+    </div>
+
+    <div class="columns">
+        <!-- LEFT PANEL: upload + prediction + edit -->
+        <div class="left-panel">
+            <div class="card">
+                <div class="card-title">📤 Step 1: Upload Slab Image</div>
+                <div id="uploadArea" class="upload-area" onclick="document.getElementById('fileInput').click()">
+                    <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" style="display:none" />
+                    <div class="upload-label">
+                        <div class="upload-icon">🖼️</div>
+                        <div>Click or drag & drop</div>
+                        <div style="font-size:0.75rem; color:#64748b;">JPG, PNG, WEBP</div>
+                    </div>
+                </div>
+                <div id="imagePreviewContainer" style="margin-top: 1rem; display: none;">
+                    <img id="imagePreview" class="preview-img" alt="preview" style="max-width:100%; max-height:260px; object-fit:contain;">
+                </div>
+                <button id="predictBtn" disabled>🔮 Predict Top‑5 Families</button>
+            </div>
+
+            <!-- predictions card (dynamically shown) -->
+            <div id="predictionsCard" class="card" style="display: none;">
+                <div class="card-title">📋 Step 2: Predicted Families <span class="badge">DINOv2</span></div>
+                <div id="predTableContainer"></div>
+                <div class="separator"></div>
+                <div class="card-title" style="margin-top:0.5rem;">✏️ Step 3: Edit Candidates (optional)</div>
+                <div class="info-box">Modify JSON array. Required: 'family_name' per object.</div>
+                <textarea id="candidatesJson" rows="6" placeholder='[{"family_name": "MARBLE"}, {"family_name": "GRANITE"}]'></textarea>
+                <button id="rerankBtn" disabled>🚀 Run Gemini Rerank</button>
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL: rerank results -->
+        <div class="right-panel">
+            <div class="card">
+                <div class="card-title">📊 Rerank Results</div>
+                <div id="resultsPlaceholder" class="info-box" style="background:#f1f5f9; text-align:center;">
+                    ⚡ Upload an image, run prediction, then rerank to see results.
+                </div>
+                <div id="rerankResultsContent" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+    <footer>
+        ⚙️ Requires backend API: <code>/predict</code> (multipart file) returns families[]<br>
+        <code>/rerank</code> (file + candidates JSON) returns Gemini rerank response.
+        If no backend, mock mode will be used for demo (configurable).
+    </footer>
+</div>
+
+<script>
+    // ---------- DOM elements ----------
+    const fileInput = document.getElementById('fileInput');
+    const predictBtn = document.getElementById('predictBtn');
+    const rerankBtn = document.getElementById('rerankBtn');
+    const predictionsCard = document.getElementById('predictionsCard');
+    const predTableContainer = document.getElementById('predTableContainer');
+    const candidatesJsonTextarea = document.getElementById('candidatesJson');
+    const resultsPlaceholder = document.getElementById('resultsPlaceholder');
+    const rerankResultsContent = document.getElementById('rerankResultsContent');
+    const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+    const imagePreview = document.getElementById('imagePreview');
+
+    // ---------- state ----------
+    let currentImageFile = null;        // actual File object
+    let currentPredictions = null;      // array of {family, family_score}
+    let currentRerankResult = null;
+    let lastUploadedName = null;
+    let isPredicting = false;
+    let isReranking = false;
+
+    // ---------- config: backend endpoints (change to your actual API) ----------
+    const API_BASE = window.location.origin;     // assumes backend serves same origin, or set explicitly: e.g., "http://localhost:8000"
+    const PREDICT_ENDPOINT = `${API_BASE}/predict`;
+    const RERANK_ENDPOINT = `${API_BASE}/rerank`;
+
+    // ---------- helper: display prediction table ----------
+    function renderPredictionsTable(predictions) {
+        if (!predictions || predictions.length === 0) {
+            predTableContainer.innerHTML = '<div class="info-box">⚠️ No predictions returned.</div>';
+            return;
+        }
+        let html = `<table class="dataframe">
+            <thead><tr><th>Family</th><th>Score</th></tr></thead><tbody>`;
+        predictions.forEach(p => {
+            html += `<tr><td><strong>${escapeHtml(p.family)}</strong></td><td>${p.family_score}</td></tr>`;
+        });
+        html += `</tbody></table>`;
+        predTableContainer.innerHTML = html;
+        // auto populate candidates JSON
+        const candidateList = predictions.map(p => ({ family_name: p.family.toUpperCase() }));
+        candidatesJsonTextarea.value = JSON.stringify(candidateList, null, 2);
+    }
+
+    // simple escape
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    // display rerank results
+    function renderRerankResults(result) {
+        if (!result) return;
+        // build html content
+        let html = '';
+        if (result.image_summary) {
+            html += `<div class="info-box" style="background:#eef2ff; border-left-color:#3b82f6;">
+                        <strong>📝 Gemini's Image Summary</strong><br>${escapeHtml(result.image_summary)}
+                    </div>`;
+        }
+        if (result.ranked_families && result.ranked_families.length) {
+            html += `<strong>🏆 Re‑ranked Families</strong>
+                    <table class="rank-table">
+                        <thead><tr><th>Rank</th><th>Family</th><th>Confidence</th><th>Match Reason</th></tr></thead>
+                        <tbody>`;
+            result.ranked_families.forEach(item => {
+                const conf = item.confidence != null ? item.confidence.toFixed(3) : 'N/A';
+                html += `<tr>
+                            <td>${item.rank ?? '?'}</td>
+                            <td><strong>${escapeHtml(item.family_name)}</strong></td>
+                            <td>${conf}</td>
+                            <td>${escapeHtml(item.match_reason || '—')}</td>
+                         </tr>`;
+            });
+            html += `</tbody></table>`;
+
+            // detailed expandable section
+            html += `<div class="expandable" onclick="toggleDetails(this)">🔍 Detailed Explanations ▼</div>
+                    <div class="details-content" style="display:none;">`;
+            result.ranked_families.forEach(item => {
+                html += `<div style="margin-top:0.8rem;"><b>${escapeHtml(item.family_name)}</b> (Rank ${item.rank})<br>
+                        <i>Match reason:</i> ${escapeHtml(item.match_reason || 'N/A')}<br>`;
+                if (item.mismatch_notes) html += `<i>Mismatch notes:</i> ${escapeHtml(item.mismatch_notes)}<br>`;
+                html += `</div><hr style="margin:0.5rem 0;">`;
+            });
+            html += `</div>`;
+        }
+
+        // kb hits/misses
+        const hits = result.kb_hits || [];
+        const misses = result.kb_misses || [];
+        html += `<div class="metrics">
+                    <div class="metric-card"><div class="metric-value">✅ ${hits.length}</div><div>KB Hits</div>${hits.length ? `<div style="font-size:0.7rem;">${escapeHtml(hits.slice(0,3).join(', '))}${hits.length>3 ? '...' : ''}</div>` : ''}</div>
+                    <div class="metric-card"><div class="metric-value">❌ ${misses.length}</div><div>KB Misses</div>${misses.length ? `<div style="font-size:0.7rem;">${escapeHtml(misses.slice(0,3).join(', '))}</div>` : ''}</div>
+                </div>`;
+
+        // raw response expander
+        html += `<div class="expandable" onclick="toggleDetails(this)">📄 Raw Response ▼</div>
+                <div class="details-content" style="display:none; background:#f1f5f9; padding:0.75rem; border-radius:0.75rem; margin-top:0.5rem;">
+                <pre style="white-space:pre-wrap; font-size:0.7rem;">${escapeHtml(JSON.stringify(result, null, 2))}</pre>
+                </div>`;
+        rerankResultsContent.innerHTML = html;
+        rerankResultsContent.style.display = 'block';
+        resultsPlaceholder.style.display = 'none';
+    }
+
+    window.toggleDetails = function(el) {
+        const content = el.nextElementSibling;
+        if (content && content.classList.contains('details-content')) {
+            const isVisible = content.style.display === 'block';
+            content.style.display = isVisible ? 'none' : 'block';
+            el.innerText = isVisible ? (el.innerText.replace('▲', '▼') || el.innerText) : (el.innerText.replace('▼', '▲'));
+            if (!isVisible) el.innerText = el.innerText.replace('▼', '▲');
+            else el.innerText = el.innerText.replace('▲', '▼');
+        }
+    };
+
+    // reset UI on new file
+    function resetOnNewFile(filename) {
+        if (lastUploadedName !== filename) {
+            currentPredictions = null;
+            currentRerankResult = null;
+            predictionsCard.style.display = 'none';
+            rerankResultsContent.style.display = 'none';
+            resultsPlaceholder.style.display = 'block';
+            resultsPlaceholder.innerHTML = '⚡ Upload an image, run prediction, then rerank to see results.';
+            predictBtn.disabled = true;
+            rerankBtn.disabled = true;
+            lastUploadedName = filename;
+        }
+    }
+
+    // handle file selection
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        currentImageFile = file;
+        resetOnNewFile(file.name);
+
+        // preview image
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            imagePreview.src = ev.target.result;
+            imagePreviewContainer.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+        predictBtn.disabled = false;
+        predictBtn.innerText = '🔮 Predict Top‑5 Families';
+        predictBtn.style.opacity = '1';
+        // clear any previous rerank visuals
+        rerankResultsContent.style.display = 'none';
+        resultsPlaceholder.style.display = 'block';
+    });
+
+    // ---------- PREDICT call ----------
+    async function callPredict(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const response = await fetch(PREDICT_ENDPOINT, {
+                method: 'POST',
+                body: formData,
+            });
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Prediction API error ${response.status}: ${errText}`);
+            }
+            const data = await response.json();
+            // expected format: { families: [{family, family_score}] } or direct { predictions: [] }? adapt to pipeline style
+            // The original streamlit returned list of dicts with 'family' and 'family_score'.
+            let preds = null;
+            if (data.families && Array.isArray(data.families)) {
+                preds = data.families.map(f => ({ family: f.family, family_score: f.family_score ?? f.score }));
+            } else if (data.predictions && Array.isArray(data.predictions)) {
+                preds = data.predictions;
+            } else if (Array.isArray(data)) {
+                preds = data;
+            } else {
+                throw new Error('Unexpected prediction response format');
+            }
+            return preds.slice(0,5);
+        } catch (err) {
+            console.error(err);
+            // FALLBACK TO MOCK if backend not reachable (for demo / local testing)
+            if (confirm(`Prediction endpoint unreachable (${err.message}). Use mock demo data?`)) {
+                return getMockPredictions();
+            }
+            throw err;
+        }
+    }
+
+    function getMockPredictions() {
+        // mock predictions based on typical stone families
+        return [
+            { family: "MARBLE", family_score: 0.8921 },
+            { family: "GRANITE", family_score: 0.7643 },
+            { family: "QUARTZITE", family_score: 0.5231 },
+            { family: "LIMESTONE", family_score: 0.4122 },
+            { family: "SLATE", family_score: 0.3056 }
+        ];
+    }
+
+    // RERANK call
+    async function callRerank(file, candidatesArray) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('candidates', JSON.stringify(candidatesArray));
+        try {
+            const response = await fetch(RERANK_ENDPOINT, {
+                method: 'POST',
+                body: formData,
+            });
+            if (!response.ok) {
+                const err = await response.text();
+                throw new Error(`Rerank API error ${response.status}: ${err}`);
+            }
+            const result = await response.json();
+            return result;
+        } catch (err) {
+            console.warn(err);
+            if (confirm(`Rerank endpoint failed (${err.message}). Use mock rerank result?`)) {
+                return getMockRerankResult(candidatesArray);
+            }
+            throw err;
+        }
+    }
+
+    function getMockRerankResult(candidates) {
+        const ranked = candidates.map((c, idx) => ({
+            rank: idx+1,
+            family_name: c.family_name,
+            confidence: 0.95 - idx*0.12,
+            match_reason: `Visual similarity appears high for ${c.family_name} based on texture analysis.`,
+            mismatch_notes: idx === 0 ? "" : "Minor color variation detected."
+        }));
+        return {
+            status: "success",
+            image_summary: "Mock analysis: The slab shows white/ gray veins, high gloss, likely a marble or quartzite appearance.",
+            ranked_families: ranked,
+            kb_hits: candidates.slice(0,3).map(c => c.family_name),
+            kb_misses: candidates.slice(3).map(c => c.family_name),
+        };
+    }
+
+    // prediction button handler
+    predictBtn.addEventListener('click', async () => {
+        if (!currentImageFile) {
+            alert('Please select an image first');
+            return;
+        }
+        if (isPredicting) return;
+        isPredicting = true;
+        const originalText = predictBtn.innerText;
+        predictBtn.disabled = true;
+        predictBtn.innerHTML = '<span class="status-loading"><span class="spinner"></span> Running DINOv2...</span>';
+        try {
+            const predictions = await callPredict(currentImageFile);
+            if (predictions && predictions.length) {
+                currentPredictions = predictions;
+                predictionsCard.style.display = 'block';
+                renderPredictionsTable(predictions);
+                rerankBtn.disabled = false;
+                // clear previous rerank result area
+                rerankResultsContent.style.display = 'none';
+                resultsPlaceholder.style.display = 'block';
+                resultsPlaceholder.innerHTML = '✅ Prediction done. Edit candidates if needed, then click "Run Gemini Rerank".';
+            } else {
+                throw new Error('No predictions returned');
+            }
+        } catch (err) {
+            alert(`Prediction error: ${err.message}`);
+            predictionsCard.style.display = 'none';
+        } finally {
+            isPredicting = false;
+            predictBtn.disabled = false;
+            predictBtn.innerText = originalText;
+        }
+    });
+
+    // rerank button handler
+    rerankBtn.addEventListener('click', async () => {
+        if (!currentImageFile) {
+            alert('No image uploaded');
+            return;
+        }
+        let candidatesJson;
+        try {
+            candidatesJson = JSON.parse(candidatesJsonTextarea.value);
+            if (!Array.isArray(candidatesJson) || !candidatesJson.every(item => item && typeof item === 'object' && 'family_name' in item)) {
+                throw new Error('Each candidate must have "family_name" field');
+            }
+        } catch (e) {
+            alert(`Invalid JSON: ${e.message}\nPlease provide valid array of objects with family_name.`);
+            return;
+        }
+
+        if (isReranking) return;
+        isReranking = true;
+        rerankBtn.disabled = true;
+        const originalBtnText = rerankBtn.innerText;
+        rerankBtn.innerHTML = '<span class="status-loading"><span class="spinner"></span> Calling Gemini Rerank...</span>';
+        try {
+            const result = await callRerank(currentImageFile, candidatesJson);
+            if (result && (result.ranked_families || result.image_summary)) {
+                currentRerankResult = result;
+                renderRerankResults(result);
+            } else {
+                throw new Error('Invalid rerank response');
+            }
+        } catch (err) {
+            alert(`Rerank failed: ${err.message}`);
+            rerankResultsContent.style.display = 'none';
+            resultsPlaceholder.style.display = 'block';
+            resultsPlaceholder.innerHTML = `❌ Rerank error: ${err.message}`;
+        } finally {
+            isReranking = false;
+            rerankBtn.disabled = false;
+            rerankBtn.innerText = originalBtnText;
+        }
+    });
+
+    // initial state adjustments
+    window.addEventListener('load', () => {
+        predictBtn.disabled = true;
+        rerankBtn.disabled = true;
+        predictionsCard.style.display = 'none';
+        // optional: check if backend available? just informative
+        console.log("StoneX UI ready. Ensure backend endpoints /predict and /rerank are implemented.");
+    });
+
+    // Helper to allow resetting on new file drag-drop area manual trigger
+    const uploadArea = document.getElementById('uploadArea');
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.style.borderColor = '#3b82f6';
+    });
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.style.borderColor = '#cbd5e1';
+    });
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.style.borderColor = '#cbd5e1';
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+            fileInput.files = e.dataTransfer.files;
+            const changeEvent = new Event('change', { bubbles: true });
+            fileInput.dispatchEvent(changeEvent);
+        } else {
+            alert('Please drop an image file');
+        }
+    });
+</script>
+</body>
+</html>
