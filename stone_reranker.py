@@ -26,17 +26,30 @@ from google.genai import types
 
 logger = logging.getLogger(__name__)
 
-# ── Gemini configuration (hardcoded API key) ───────────────────────────────────
+# ── Gemini configuration ───────────────────────────────────────────────────
 GEMINI_MODEL = "gemini-2.5-flash-lite"
 
-_API_KEYS = ["AIzaSyDgjXg7p2oZNKfwqZe_AmQkjWhrCkpUUwM"]
+# Global variable to store the API key (set by UI)
+_GEMINI_API_KEY: str | None = None
 
-logger.info("Loaded %d Gemini API key(s)", len(_API_KEYS))
+
+def set_gemini_api_key(api_key: str) -> None:
+    """Set the Gemini API key to be used for reranking."""
+    global _GEMINI_API_KEY
+    _GEMINI_API_KEY = api_key
+    logger.info("Gemini API key set")
 
 
-def _create_client(api_key: str) -> genai.Client:
-    """Create a new Gemini client with the given API key."""
-    return genai.Client(api_key=api_key)
+def get_gemini_api_key() -> str | None:
+    """Get the current Gemini API key."""
+    return _GEMINI_API_KEY
+
+
+def _create_client() -> genai.Client:
+    """Create a new Gemini client with the stored API key."""
+    if _GEMINI_API_KEY is None:
+        raise RuntimeError("Gemini API key not set. Please provide an API key in the UI.")
+    return genai.Client(api_key=_GEMINI_API_KEY)
 
 
 # ── Stone knowledge base ───────────────────────────────────────────────────────
@@ -50,12 +63,15 @@ def _get_kb_path() -> Path:
         return kb_path
     
     # Try in the app's root directory (for Streamlit Cloud)
-    import streamlit.web.bootstrap as bootstrap
-    app_root = Path(bootstrap.__file__).parent.parent
-    kb_path = app_root / "stones_db.json"
-    
-    if kb_path.exists():
-        return kb_path
+    try:
+        import streamlit.web.bootstrap as bootstrap
+        app_root = Path(bootstrap.__file__).parent.parent
+        kb_path = app_root / "stones_db.json"
+        
+        if kb_path.exists():
+            return kb_path
+    except ImportError:
+        pass
     
     # If not found, return the original path (will raise error later)
     return current_dir / "stones_db.json"
@@ -201,85 +217,60 @@ Return ONLY this JSON object:
 }}
 """
 
-# ── Gemini call with multi‑key fallback ────────────────────────────────────────
-def _call_gemini_with_fallback(
+# ── Gemini call with single key (no fallback needed) ──────────────────────────
+def _call_gemini(
     image_bytes: bytes,
     image_mime: str,
     candidate_block: str,
 ) -> dict:
     """
-    Attempt to call Gemini using available API keys.
-    On quota/resource exhausted errors, automatically retry with the next key.
+    Call Gemini using the API key set via set_gemini_api_key().
     """
-    last_exception = None
+    if _GEMINI_API_KEY is None:
+        raise RuntimeError("Gemini API key not set. Please provide an API key in the UI.")
+    
+    try:
+        client = _create_client()
+        
+        user_text = _USER_PROMPT_TEMPLATE.format(
+            candidate_block=candidate_block,
+        )
 
-    for idx, api_key in enumerate(_API_KEYS):
-        try:
-            client = _create_client(api_key)
-            
-            user_text = _USER_PROMPT_TEMPLATE.format(
-                candidate_block=candidate_block,
-            )
+        contents = [
+            types.Part.from_bytes(data=image_bytes, mime_type=image_mime),
+            types.Part.from_text(text=user_text),
+        ]
 
-            contents = [
-                types.Part.from_bytes(data=image_bytes, mime_type=image_mime),
-                types.Part.from_text(text=user_text),
-            ]
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=_SYSTEM_PROMPT,
+                temperature=0.1,
+                response_mime_type="application/json",
+            ),
+        )
 
-            response = client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=_SYSTEM_PROMPT,
-                    temperature=0.1,
-                    response_mime_type="application/json",
-                ),
-            )
+        raw_text = response.text
+        if not raw_text or not raw_text.strip():
+            raise RuntimeError("Gemini returned an empty response.")
 
-            raw_text = response.text
-            if not raw_text or not raw_text.strip():
-                raise RuntimeError("Gemini returned an empty response.")
+        clean = raw_text.strip()
+        if clean.startswith("```"):
+            clean = clean.split("\n", 1)[-1]
+        if clean.endswith("```"):
+            clean = clean.rsplit("```", 1)[0]
+        clean = clean.strip()
 
-            clean = raw_text.strip()
-            if clean.startswith("```"):
-                clean = clean.split("\n", 1)[-1]
-            if clean.endswith("```"):
-                clean = clean.rsplit("```", 1)[0]
-            clean = clean.strip()
+        # Success – return parsed JSON
+        return json.loads(clean)
 
-            # Success – return parsed JSON
-            return json.loads(clean)
-
-        except Exception as e:
-            error_msg = str(e).lower()
-            # Check if this is a quota / resource exhausted error
-            is_quota_error = (
-                "resource exhausted" in error_msg
-                or "quota" in error_msg
-                or "429" in error_msg
-                or (hasattr(e, 'status_code') and e.status_code == 429)
-                or (isinstance(e, genai_errors.ClientError) and hasattr(e, 'status_code') and e.status_code == 429)
-            )
-            
-            if is_quota_error:
-                logger.warning(
-                    "API key %d (prefix %s) failed with quota/resource exhausted error. "
-                    "Switching to next key if available.",
-                    idx + 1,
-                    api_key[:8] + "...",
-                )
-                last_exception = e
-                continue  # try next key
-            else:
-                # Non‑quota error – re‑raise immediately
-                logger.error("Non‑retryable error with API key %d: %s", idx + 1, e)
-                raise
-
-    # If we exhausted all keys, raise the last quota error
-    raise RuntimeError(
-        "All available Gemini API keys have exhausted their quota or are invalid. "
-        "Please add fresh keys or wait for quota reset."
-    ) from last_exception
+    except Exception as e:
+        error_msg = str(e).lower()
+        # Check if this is an API key error
+        if "api key" in error_msg or "authentication" in error_msg or "unauthorized" in error_msg:
+            raise RuntimeError("Invalid or unauthorized Gemini API key. Please check your API key.") from e
+        raise
 
 
 # ── Public async entry point ───────────────────────────────────────────────────
@@ -309,6 +300,9 @@ async def rerank_stone_families(
     """
     if not candidates:
         raise ValueError("candidates list must not be empty.")
+    
+    if _GEMINI_API_KEY is None:
+        raise RuntimeError("Gemini API key not set. Please provide an API key in the UI.")
 
     kb_hits = []
     kb_misses = []
@@ -323,9 +317,9 @@ async def rerank_stone_families(
 
     candidate_block = _build_candidate_block(candidates)
 
-    # Run the Gemini call (with fallback) in a thread pool to avoid blocking the event loop
+    # Run the Gemini call in a thread pool to avoid blocking the event loop
     gemini_result = await asyncio.to_thread(
-        _call_gemini_with_fallback,
+        _call_gemini,
         image_bytes,
         image_mime,
         candidate_block,
