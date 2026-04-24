@@ -19,7 +19,11 @@ from PIL import Image
 from query.pipeline import run_pipeline
 import features.dino_embedder as dino_embedder
 from cmd_mapping import resolve_family_name, is_cmd_class
-from stone_reranker import rerank_stone_families
+from stone_reranker import (
+    rerank_stone_families, 
+    set_gemini_api_key, 
+    get_gemini_api_key
+)
 
 load_dotenv()
 
@@ -121,6 +125,8 @@ def init_session_state():
         "candidates_json": "",
         "rerank_result": None,
         "last_uploaded_filename": None,
+        "gemini_api_key": "",
+        "api_key_validated": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -139,6 +145,73 @@ def on_file_upload():
             st.session_state.candidates_json = ""
             st.session_state.rerank_result = None
             st.session_state.last_uploaded_filename = new_filename
+
+# ------------------------------------------------------------------
+# API Key validation
+# ------------------------------------------------------------------
+def validate_api_key(api_key: str) -> bool:
+    """Quick validation of API key format."""
+    if not api_key or not api_key.strip():
+        return False
+    # Basic format check: Gemini API keys are typically ~39 chars and start with "AIza"
+    api_key = api_key.strip()
+    if not api_key.startswith("AIza"):
+        st.warning("⚠️ Gemini API keys typically start with 'AIza'")
+    if len(api_key) < 30:
+        st.warning("⚠️ API key seems too short")
+    return True
+
+# ------------------------------------------------------------------
+# Sidebar for API Key input
+# ------------------------------------------------------------------
+with st.sidebar:
+    st.header("🔑 Gemini API Configuration")
+    st.markdown("""
+    To use the Gemini reranking feature, you need a **Gemini API key**.
+    
+    [Get a free API key from Google AI Studio](https://aistudio.google.com/apikey)
+    """)
+    
+    api_key_input = st.text_input(
+        "Gemini API Key",
+        type="password",
+        placeholder="Enter your API key (starts with AIza...)",
+        value=st.session_state.gemini_api_key,
+        key="api_key_input",
+        help="Your API key is stored only in this session and never saved to disk."
+    )
+    
+    if st.button("Set API Key", type="primary", use_container_width=True):
+        if validate_api_key(api_key_input):
+            st.session_state.gemini_api_key = api_key_input.strip()
+            set_gemini_api_key(api_key_input.strip())
+            st.session_state.api_key_validated = True
+            st.success("✅ API key set successfully!")
+        else:
+            st.error("Please enter a valid API key")
+    
+    if st.session_state.api_key_validated:
+        st.success("🔓 API key is set and ready")
+        
+        # Option to clear the key
+        if st.button("Clear API Key", use_container_width=True):
+            st.session_state.gemini_api_key = ""
+            set_gemini_api_key("")
+            st.session_state.api_key_validated = False
+            st.session_state.rerank_result = None
+            st.warning("API key cleared")
+            st.rerun()
+    else:
+        st.warning("⚠️ API key not set. Gemini reranking will not work.")
+    
+    st.divider()
+    st.markdown("### 💡 Tips")
+    st.markdown("""
+    - The API key is **never saved** to disk
+    - It's stored only in your current browser session
+    - Free tier includes 60 requests per minute
+    - Reranking uses ~1-2 requests per image
+    """)
 
 # ------------------------------------------------------------------
 # UI Layout
@@ -192,8 +265,11 @@ with col_left:
             # Keep session state in sync with editor
             st.session_state.candidates_json = edited_json
 
-            # Rerank button
-            if st.button("🚀 Run Gemini Rerank", type="primary", use_container_width=True):
+            # Rerank button - show warning if API key not set
+            if not st.session_state.api_key_validated:
+                st.warning("⚠️ Please set your Gemini API key in the sidebar before reranking.")
+            
+            if st.button("🚀 Run Gemini Rerank", type="primary", use_container_width=True, disabled=not st.session_state.api_key_validated):
                 try:
                     candidates = json.loads(edited_json)
                     if not isinstance(candidates, list) or not all(
@@ -272,4 +348,7 @@ with col_right:
             st.json(result)
 
     else:
-        st.info("Upload an image, click **Predict Top‑5 Families**, then **Run Gemini Rerank** to see results.")
+        if not st.session_state.api_key_validated:
+            st.info("🔑 **First: Set your Gemini API key in the sidebar** →\n\nThen upload an image, click **Predict Top‑5 Families**, then **Run Gemini Rerank** to see results.")
+        else:
+            st.info("Upload an image, click **Predict Top‑5 Families**, then **Run Gemini Rerank** to see results.")
